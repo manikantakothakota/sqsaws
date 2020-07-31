@@ -10,6 +10,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.aws.messaging.listener.annotation.SqsListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,10 +35,10 @@ public class settingqueueController {
 	private String queueurl;
 
 	@Value("${aws.bucket}")
-	private static String bucketName;
+	private  String bucketName;
 
 	@Autowired
-	private static AmazonS3 s3client;
+	private  AmazonS3 s3client;
 
 
 	/*
@@ -62,45 +63,38 @@ public class settingqueueController {
 		return messages;
 	}
 
-	@SqsListener(value = "MyQueue")
-	@GetMapping("/get")
+	@SqsListener(value = "MyQueue"/* , deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS */)
+	@Scheduled(fixedRate = 1000)
+	//@GetMapping("/get")
 	public void reciveMsg() {
-
-		String msg1="";
-		ReceiveMessageRequest messageRequest = new ReceiveMessageRequest(queueurl).withWaitTimeSeconds(10)
-				.withMaxNumberOfMessages(10);;
-
+		ReceiveMessageRequest messageRequest = new ReceiveMessageRequest(
+				queueurl)/*
+							 * .withWaitTimeSeconds(10) .withMaxNumberOfMessages(10);
+							 */;
 				ReceiveMessageResult queueResult = awsconfig.sqsClient().receiveMessage(messageRequest);
 				List<Message> messages = queueResult.getMessages();
 				if(messages!=null) {
 					for (Message message : messages) {
 						if(message!=null) {
-							msg1=message.getBody().toString();
-							addnumbers(msg1);
+							addnumbers(message.getBody().toString());
+							// delete message after successful operation
+							awsconfig.sqsClient().deleteMessage(queueurl, message.getReceiptHandle());
+							System.out.println("deleted msg :"+message.getBody());
 						}
-
 					}
 				}
-
-
-				/*
-				 * List<Message> messages =
-				 * awsconfig.sqsClient().receiveMessage(queueurl).getMessages(); for(Message
-				 * message:messages) { msg1=message.getBody().toString(); addnumbers(msg1);
-				 * 
-				 * }
-				 */	}
+	}
 
 	//	@GetMapping("/get")
-	public static String addnumbers(String msg) {
-		
+	public  String addnumbers(String msg) {
+		String name=msg;
 		File file = null;
 		String str[] = msg.split(" ");
 		List<String> al = new ArrayList<>();
 		al = Arrays.asList(str);	
 		Integer result=Integer.parseInt(al.get(0))+Integer.parseInt(al.get(1));	
 		try {
-			file=new File(msg);
+			file=new File(name);
 			FileWriter myWriter = new FileWriter(file);
 			myWriter.write("firstvalue :"+al.get(0)+","+"secondvalue :"+al.get(1)+","+"result :"+result);
 			myWriter.close();
@@ -108,15 +102,14 @@ public class settingqueueController {
 		} catch (IOException e) {
 			System.out.println("An error occurred.");
 			e.printStackTrace();
-		}
+		}System.out.println(bucketName);
 		s3client.putObject(
 				bucketName, 
-				msg, 
+				name, 
 				file
 				);
 		System.out.println(result);
 		return "file added to s3bucket";
-
 	}
 }
 
