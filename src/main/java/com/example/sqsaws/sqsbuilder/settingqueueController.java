@@ -109,6 +109,7 @@ public class settingqueueController {
 				file
 				);
 		System.out.println(result);
+		 file.delete();
 		return "file added to s3bucket";
 	}
 }
